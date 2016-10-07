@@ -1,0 +1,105 @@
+---
+title: "Untitled"
+author: "Jenna Braun"
+date: "October 6, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+#library(plyr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+
+canada.sales <- read.csv("canada/canadian.candy.sales.csv")
+summary(canada.sales)
+str(canada.sales)
+canada.sales$year <- as.integer(canada.sales$year)
+#canada.sales$month <- as.factor(canada.sales$month)
+#canada.sales$day <- as.factor(canada.sales$day)
+
+str(canada.sales)
+
+#want the sum of all the sales for each year
+sales_by_year <- group_by(canada.sales,year) %>% summarise(sales=sum(candy.sales))
+# sales_by_year <- ddply(canada.sales,~year,summarize, sales=sum(candy.sales)) this way works super well if you have lots of columns to collapse
+
+#read in children population data and join to sales data by year. Join to children to sales so that all only years that are in sales dataset are kept 
+children_pop <- read.csv("canada/canadian.children.csv")
+sales_by_year <- right_join(children_pop, sales_by_year, by = "year")
+
+#read in and join youth health to sales-population data set
+children_health <- read.csv("canada/canadian.youth.health.csv")
+sales_by_year <- right_join(children_health, sales_by_year, by = "year")
+
+#hopefully dataset is complete
+str(sales_by_year)
+
+#nope number of children is factor & need to strip out them commmas
+sales_by_year$children.5.to.14 <- as.numeric(gsub(",","",sales_by_year$children.5.to.14))
+
+str(sales_by_year) #finally
+
+#calculate sales per child, put in new column. Children aren't eating or buying all the candy... 
+sales_by_year <- mutate(sales_by_year, sales.per.child = sales/children.5.to.14) 
+
+
+#calculate diabetes cases per child, put in new column
+#is it usual to normalize disease cases per 1000 but is this okay to do when calculating stats?? results were the same regardless
+sales_by_year <- mutate(sales_by_year, diabetes.cases = (Diabetes/children.5.to.14)*1000)
+
+
+#are the variable normally distributed?
+
+shapiro.test(sales_by_year$diabetes.cases)
+shapiro.test(sales_by_year$sales.per.child)
+
+#yes! but who is shapiro anyways, lets look at the distribution
+
+ggplot(data = sales_by_year, aes(diabetes.cases)) + geom_density() + xlab("Diabetes Cases per 1000 children ")
+
+ggplot(data = sales_by_year, aes(sales.per.child)) + geom_density() + xlab("Candy Sales per Child")
+#not too bad, diabetes cases is a bit left skewed, candy sales a bit bimodal
+
+
+#make a plot of increased sales by year
+ggplot(data = sales_by_year, aes(year,sales.per.child)) + geom_point() + geom_smooth(method="lm") + xlab("Year") + ylab("Candy Sales per Child in Canada")
+
+#diabetes cases by year
+ggplot(data = sales_by_year, aes(year,diabetes.cases)) + geom_point() + geom_smooth(method="lm") + xlab("Year") + ylab("Diabetes Cases per 100 children")
+
+
+ggplot(data = sales_by_year, aes(sales.per.child, diabetes.cases)) + geom_smooth(method="lm") + geom_point() + xlab("Candy Sales per Child, $") + ylab("Diabetes Cases per 1000 children") +  xlim(0.5,1)
+
+
+
+m1 <- lm(year~sales.per.child, data = sales_by_year,,,na.omit)
+plot(m1)
+anova(m1, test="Chisq")
+
+#candy sales per children definately going up
+
+m3 <- lm(diabetes.cases~year, data = sales_by_year,,,na.omit)
+anova(m3, test="Chisq")
+
+#diabetes cases are not!
+
+m2 <- glm(diabetes.cases~sales.per.child, data = sales_by_year,,,,na.omit)
+anova(m2, test="Chisq")
+
+#no effect of increased candy sales on rates of diabetes in children
+
+```
+
+
